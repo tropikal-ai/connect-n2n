@@ -1,0 +1,59 @@
+{
+    "name": "tropikal-ai/connect-n2n",
+    "description": "TROPIKAL Connect integration for n2n Rocket CMF.",
+    "keywords": [
+        "tropikal",
+        "connect",
+        "n2n",
+        "rocket",
+        "cmf"
+    ],
+    "type": "n2n-module",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Tropikal AI"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-openssl": "*",
+        "n2n/rocket": "^4.0@dev",
+        "tropikal-ai/connect": "^0.1"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.24",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^11.0|^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "tropikal\\connect\\n2n\\": "src/app/tropikal/connect/n2n"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "tropikal\\connect\\n2n\\tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.1-dev"
+        }
+    },
+    "scripts": {
+        "analyse": "phpstan analyse",
+        "format": "pint",
+        "test": "phpunit --colors=never"
+    },
+    "config": {
+        "allow-plugins": {
+            "n2n/n2n-composer-module-installer": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

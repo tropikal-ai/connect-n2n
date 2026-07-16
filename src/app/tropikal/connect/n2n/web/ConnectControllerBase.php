@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace tropikal\connect\n2n\web;
 
-use n2n\persistence\orm\EntityManager;
+use n2n\core\container\N2nContext;
 use n2n\web\http\controller\ControllerAdapter;
 use n2n\web\http\Method;
 use tropikal\connect\n2n\application\ApiResult;
@@ -21,12 +21,13 @@ abstract class ConnectControllerBase extends ControllerAdapter
 {
     protected ConnectComposition $comp;
 
-    abstract protected function composition(EntityManager $em): ConnectComposition;
+    abstract protected function composition(N2nContext $n2nContext): ConnectComposition;
 
-    // n2n magic init: must be private. Dispatches to the subclass composition().
-    private function _init(EntityManager $em): void
+    // n2n magic init: must be private. Dispatches to the subclass composition(),
+    // which looks up whatever it needs (e.g. the EntityManager) from the context.
+    private function _init(N2nContext $n2nContext): void
     {
-        $this->comp = $this->composition($em);
+        $this->comp = $this->composition($n2nContext);
     }
 
     /**
@@ -54,6 +55,34 @@ abstract class ConnectControllerBase extends ControllerAdapter
         }
 
         return $installation;
+    }
+
+    /**
+     * The signed-API request pipeline: verify the TROPIKAL signature, run the
+     * operation inside a transaction (read-only for queries), and respond with
+     * the JSON envelope. Unexpected failures roll back and map to a 500
+     * without leaking internals.
+     *
+     * @param  \Closure(Installation): ApiResult  $operation
+     */
+    protected function guardedApi(bool $readOnly, \Closure $operation): void
+    {
+        $installation = $this->verifiedInstallation();
+        if ($installation === null) {
+            return;
+        }
+
+        $this->beginTransaction($readOnly);
+        try {
+            $result = $operation($installation);
+            $this->commit();
+        } catch (\Throwable $e) {
+            $this->rollBack();
+            error_log('[connect] '.$e::class.': '.$e->getMessage());
+            $result = ApiResult::error('internal_error', 'Operation failed.', 500);
+        }
+
+        $this->respond($result);
     }
 
     protected function respond(ApiResult $result): void

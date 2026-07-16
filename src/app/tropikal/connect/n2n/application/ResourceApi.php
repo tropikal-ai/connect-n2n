@@ -29,6 +29,7 @@ final readonly class ResourceApi
         private FieldProjection $fields,
         private CapabilityFactory $capabilities,
         private AuditRecorder $audit,
+        private ResourceWriteBinder $binder = new ResourceWriteBinder,
     ) {}
 
     public function list(Installation $installation, string $slug, ListQuery $query): ApiResult
@@ -77,7 +78,7 @@ final readonly class ResourceApi
         }
 
         try {
-            $validated = $this->fields->validateWrite($spec, $data, true);
+            $validated = $this->binder->bind($spec, $data, true);
         } catch (InvalidWriteException $exception) {
             return $this->writeError($exception);
         }
@@ -100,7 +101,7 @@ final readonly class ResourceApi
         }
 
         try {
-            $validated = $this->fields->validateWrite($spec, $data, false);
+            $validated = $this->binder->bind($spec, $data, false);
         } catch (InvalidWriteException $exception) {
             return $this->writeError($exception);
         }

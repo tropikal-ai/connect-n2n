@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Native n2n reshape (unreleased)
+
+- Routing: `ResourceController` now declares its REST routes natively via
+  `_annos()` + `AnnoPath` patterns gated per verb (`AnnoGet`/`AnnoPost`/
+  `AnnoPut`/`AnnoDelete`) instead of a hand-rolled `match` on the method.
+  **Breaking:** PATCH is no longer accepted as an alias for PUT (n2n has no
+  PATCH dispatch).
+- Binding: write payloads and list queries pass through **n2n-bind** with
+  type-appropriate mappers per declared field. New stable wire code
+  `invalid_fields` for type violations (unknown/missing keep their codes).
+- **Breaking:** `ConnectControllerBase::composition()` now receives the
+  `N2nContext` instead of the `EntityManager` — look up what you need from the
+  context. This frees hosts (and tests) from a mandatory persistence unit.
+- Admin surface throws n2n's typed `ForbiddenException` (native 403 page)
+  instead of emitting ad-hoc JSON.
+- New routed integration suite: boots a real `N2nContext` via `n2n/n2n-test`
+  and drives signed HTTP requests through router → annotations → guard →
+  n2n-bind → API.
+
 ### Added
 - **One-click connect (OAuth 2.1 + PKCE)** mirroring the Filament adapter:
   `ConnectFlow` (begin/complete), dynamic client registration, control-plane

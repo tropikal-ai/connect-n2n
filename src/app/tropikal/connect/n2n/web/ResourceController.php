@@ -4,76 +4,89 @@ declare(strict_types=1);
 
 namespace tropikal\connect\n2n\web;
 
-use n2n\web\http\Method;
-use tropikal\connect\n2n\application\ApiResult;
-use tropikal\connect\n2n\domain\installation\Installation;
+use n2n\bind\build\impl\Bind;
+use n2n\bind\mapper\impl\Mappers;
+use n2n\reflection\annotation\AnnoInit;
+use n2n\web\http\annotation\AnnoDelete;
+use n2n\web\http\annotation\AnnoGet;
+use n2n\web\http\annotation\AnnoPath;
+use n2n\web\http\annotation\AnnoPost;
+use n2n\web\http\annotation\AnnoPut;
 use tropikal\connect\n2n\domain\resource\ListQuery;
 
 /**
- * The signed resource API a TROPIKAL job drives:
+ * The signed resource API a TROPIKAL job drives, routed natively per HTTP
+ * verb via n2n path annotations:
+ *
  *   GET    /resources/{slug}        list (page, per_page, search honoured)
- *   GET    /resources/{slug}/{id}   get
+ *   GET    /resources/{slug}/{id}   detail
  *   POST   /resources/{slug}        create
- *   PUT    /resources/{slug}/{id}   update   (PATCH accepted too)
- *   DELETE /resources/{slug}/{id}   delete
- * Every call is HMAC-verified, then runs inside a transaction.
+ *   PUT    /resources/{slug}/{id}   update
+ *   DELETE /resources/{slug}/{id}   remove
+ *
+ * Every call is HMAC-verified, then runs inside a transaction (read-only for
+ * GET). Payloads and query parameters pass through n2n-bind before they reach
+ * the application layer.
  */
 abstract class ResourceController extends ConnectControllerBase
 {
-    public function index(?string $slug = null, ?string $id = null): void
+    private static function _annos(AnnoInit $ai): void
     {
-        $installation = $this->verifiedInstallation();
-        if ($installation === null) {
-            return;
-        }
-        if ($slug === null) {
-            $this->respond(ApiResult::error('resource_not_found', 'Resource slug required.', 404));
-
-            return;
-        }
-
-        $method = Method::toString($this->getRequest()->getMethod());
-        $this->beginTransaction($method === 'GET');
-        try {
-            $result = $this->handle($installation, $method, $slug, $id);
-            $this->commit();
-        } catch (\Throwable $e) {
-            $this->rollBack();
-            error_log('[connect] '.$e::class.': '.$e->getMessage());
-            $result = ApiResult::error('internal_error', 'Operation failed.', 500);
-        }
-
-        $this->respond($result);
+        $ai->m('list', new AnnoPath('slug:*'), new AnnoGet);
+        $ai->m('detail', new AnnoPath('slug:*/id:*'), new AnnoGet);
+        $ai->m('create', new AnnoPath('slug:*'), new AnnoPost);
+        $ai->m('update', new AnnoPath('slug:*/id:*'), new AnnoPut);
+        $ai->m('remove', new AnnoPath('slug:*/id:*'), new AnnoDelete);
     }
 
-    private function handle(Installation $installation, string $method, string $slug, ?string $id): ApiResult
+    public function list(string $slug): void
     {
-        $api = $this->comp->api;
+        $query = $this->listQuery();
+        $this->guardedApi(true, fn ($installation) => $this->comp->api->list($installation, $slug, $query));
+    }
+
+    public function detail(string $slug, string $id): void
+    {
+        $this->guardedApi(true, fn ($installation) => $this->comp->api->get($installation, $slug, $id));
+    }
+
+    public function create(string $slug): void
+    {
         $data = $this->decodedBody();
-
-        return match ($method) {
-            'GET' => $id === null
-                ? $api->list($installation, $slug, $this->listQuery())
-                : $api->get($installation, $slug, $id),
-            'POST' => $api->create($installation, $slug, $data),
-            'PUT', 'PATCH' => $id !== null
-                ? $api->update($installation, $slug, $id, $data)
-                : ApiResult::error('record_not_found', 'Record id required.', 404),
-            'DELETE' => $id !== null
-                ? $api->delete($installation, $slug, $id)
-                : ApiResult::error('record_not_found', 'Record id required.', 404),
-            default => ApiResult::error('method_not_allowed', 'Unsupported method.', 405),
-        };
+        $this->guardedApi(false, fn ($installation) => $this->comp->api->create($installation, $slug, $data));
     }
 
+    public function update(string $slug, string $id): void
+    {
+        $data = $this->decodedBody();
+        $this->guardedApi(false, fn ($installation) => $this->comp->api->update($installation, $slug, $id, $data));
+    }
+
+    public function remove(string $slug, string $id): void
+    {
+        $this->guardedApi(false, fn ($installation) => $this->comp->api->delete($installation, $slug, $id));
+    }
+
+    /**
+     * Query parameters bound through n2n-bind: garbage is rejected by the
+     * mappers, out-of-range values are clamped to the API's limits.
+     */
     private function listQuery(): ListQuery
     {
-        $q = $this->getRequest()->getQuery();
-        $perPage = (int) ($q->get('per_page') ?? $q->get('limit') ?? 20);
-        $search = trim((string) ($q->get('search') ?? ''));
+        $result = Bind::attrs($this->getRequest()->getQuery()->toArray())
+            ->optProp('page', Mappers::int(min: null, max: null))
+            ->optProp('per_page', Mappers::int(min: null, max: null))
+            ->optProp('limit', Mappers::int(min: null, max: null))
+            ->optProp('search', Mappers::cleanString(maxlength: 255))
+            ->toArray()
+            ->exec();
+
+        $q = $result->isValid() ? $result->get() : [];
+        $perPage = (int) ($q['per_page'] ?? $q['limit'] ?? 20);
+        $search = trim((string) ($q['search'] ?? ''));
 
         return new ListQuery(
-            page: max(1, (int) ($q->get('page') ?? 1)),
+            page: max(1, (int) ($q['page'] ?? 1)),
             perPage: min(100, max(1, $perPage)),
             search: $search !== '' ? $search : null,
         );

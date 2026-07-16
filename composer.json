@@ -17,16 +17,19 @@
     ],
     "require": {
         "php": ">=8.4",
+        "ext-curl": "*",
         "ext-json": "*",
         "ext-mbstring": "*",
         "ext-openssl": "*",
-        "tropikal-ai/connect": "^0.1",
+        "n2n/n2n-bind": "~7.5.0@dev",
         "n2n/n2n-persistence": "~7.5.0@dev",
         "n2n/n2n-web": "~7.5.0@dev",
-        "ext-curl": "*"
+        "tropikal-ai/connect": "^0.1"
     },
     "require-dev": {
         "laravel/pint": "^1.24",
+        "n2n/n2n": "~7.5.0@dev",
+        "n2n/n2n-test": "^7.4",
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^11.0|^12.0"
     },

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace tropikal\connect\n2n\web;
 
+use n2n\web\http\ForbiddenException;
 use tropikal\connect\n2n\domain\exception\OAuthException;
 
 /**
@@ -19,9 +20,7 @@ abstract class ConnectAdminController extends ConnectControllerBase
 {
     public function index(): void
     {
-        if (! $this->assertAdmin()) {
-            return;
-        }
+        $this->assertAdmin();
 
         $installation = $this->comp->installations->current();
         $params = $this->comp->adminGate->linkParams($this->getRequest());
@@ -46,9 +45,7 @@ abstract class ConnectAdminController extends ConnectControllerBase
 
     public function getDoConnect(): void
     {
-        if (! $this->assertAdmin()) {
-            return;
-        }
+        $this->assertAdmin();
 
         $this->redirect($this->comp->flow->begin());
     }
@@ -74,15 +71,11 @@ abstract class ConnectAdminController extends ConnectControllerBase
         $this->redirect($this->getUrlToController(null, $this->comp->adminGate->linkParams($request)));
     }
 
-    private function assertAdmin(): bool
+    /** @throws ForbiddenException rendered by n2n's native error page */
+    private function assertAdmin(): void
     {
-        if ($this->comp->adminGate->allows($this->getRequest())) {
-            return true;
+        if (! $this->comp->adminGate->allows($this->getRequest())) {
+            throw new ForbiddenException('Admin access required.');
         }
-
-        $this->getResponse()->setStatus(403);
-        $this->sendJson(['error' => 'forbidden', 'message' => 'Admin access required.']);
-
-        return false;
     }
 }

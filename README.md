@@ -59,7 +59,8 @@ where TROPIKAL lives:
 
 ```php
 class ResourceController extends \tropikal\connect\n2n\web\ResourceController {
-    protected function composition(EntityManager $em): ConnectComposition {
+    protected function composition(N2nContext $n2nContext): ConnectComposition {
+        $em = $n2nContext->lookup(EntityManager::class);
         $catalog = new StaticResourceCatalog(
             new ResourceSpec('article', 'Articles', [
                 new FieldSpec('title', 'string', writable: true, required: true),
@@ -86,6 +87,27 @@ controllers[/connect/health]    = "app\connect\controller\HealthController"
 Then open `/connect/admin`, click **Connect**, and approve. See the
 [canary app](../canary/app/connect) for a complete, runnable example including a
 signed-job end-to-end script (`bin/connect-e2e.php`).
+
+## Native n2n integration
+
+The package leans on the framework rather than around it:
+
+- **Routing** — `ResourceController` declares its REST routes natively in
+  `_annos()` via `AnnoPath` patterns gated per HTTP verb
+  (`AnnoGet`/`AnnoPost`/`AnnoPut`/`AnnoDelete`), and the admin surface uses
+  verb-prefixed do-methods (`getDoConnect`, `getDoCallback`). Supported verbs
+  are GET/POST/PUT/DELETE (n2n has no PATCH dispatch).
+- **Binding** — write payloads and list query parameters pass through
+  [n2n-bind](https://docs.n2n.rocks/docs/n2n-bind/install): each declared field
+  gets type-appropriate mappers (`cleanString`, ranged ints, strict bools), and
+  the payload fails closed with stable wire codes (`unknown_fields`,
+  `missing_required`, `invalid_fields`).
+- **Errors** — the human admin surface throws n2n's typed
+  `ForbiddenException`; the signed API keeps its JSON error envelope (that is
+  the TROPIKAL wire contract).
+- **Tests** — `tests/integration` boots a real `N2nContext` through
+  `n2n/n2n-test` and drives routed HTTP requests through the annotations,
+  guard, bind, and API — the same pipeline production serves.
 
 ## Development
 

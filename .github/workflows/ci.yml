@@ -24,6 +24,8 @@ jobs:
   quality:
     uses: realbotbob/connect/.github/workflows/php-quality.yml@e149bb948fbf140c9c5a1d918e452d3917001489
     with:
+      # n2n 7.5 (n2n-persistence/n2n-web 7.5.x-dev) requires PHP >= 8.4.
+      php-versions: '["8.4"]'
       extensions: json, mbstring, openssl, curl, sodium
       coverage: xdebug
       test: vendor/bin/phpunit --colors=never --coverage-text

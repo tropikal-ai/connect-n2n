@@ -1,95 +1,101 @@
-# TROPIKAL Connect n2n
+# TROPIKAL Connect for n2n
 
-`tropikal-ai/connect-n2n` is the native n2n Rocket CMF integration for TROPIKAL Connect.
+`tropikal-ai/connect-n2n` is the native [n2n](https://www.n2n.rocks) integration
+for **TROPIKAL Connect**. It lets an n2n site connect to TROPIKAL with one click
+and exposes the site's entities to TROPIKAL jobs through a **signed, RESTful
+resource API** — the same capability the Filament adapter provides, built the
+same way.
 
-It connects a Rocket-powered site to TROPIKAL, discovers Rocket entities through Rocket's CMF spec, lets a Rocket admin grant Read/Write/Delete access per entity, and exposes signed server-to-server endpoints for safe execution.
+It works with plain n2n ORM entities; there is no CMS dependency.
 
-This package does not implement MCP, owner chat, workflows, or an AI agent inside n2n. TROPIKAL backend imports granted entities and turns them into website chat and workflow functions.
+## What it does
 
-## Requirements
+- **One-click connect** — OAuth 2.1 + PKCE authorization, dynamic client
+  registration, and control-plane installation registration. No hand-copied
+  secrets; the signing key is issued by the control plane and stored encrypted.
+- **Signed resource API** — a TROPIKAL job reads and writes granted resources:
+  `GET/POST/PUT/DELETE /resources/{slug}`, `GET /schema`. Every request is
+  HMAC-SHA256 verified (timestamp + single-use nonce) via `tropikal-ai/connect`.
+- **Per-resource grants** — read / create / update / delete, exposed as a
+  capability manifest (`risk_level`, JSON input/output schemas).
+- **Safe by construction** — only explicitly declared fields are readable or
+  writable; secrets are AES-256-GCM encrypted at rest; mutations are audit
+  logged by field key, never value.
 
-- PHP 8.2+
-- n2n 7.5
-- Rocket 4.1 development branch until Rocket publishes a stable v4 tag
-- `tropikal-ai/connect` 0.1+
+## Architecture (DDD)
+
+```
+domain/          pure model + rules, zero framework code
+  resource/      ResourceSpec, FieldSpec, Operation, ListQuery
+  grant/         Permission
+  installation/  Installation (aggregate)
+  oauth/         PendingAuthorization
+  service/       FieldProjection, CapabilityFactory
+  port/          ResourceStore, ResourceCatalog, InstallationStore,
+                 AuthorizationServerGateway, ControlPlaneGateway, AuditRecorder
+application/     use cases: ResourceApi, SignedRequestGuard, ConnectFlow
+infrastructure/  adapters: N2nResourceStore/N2nOrmSession, Http* gateways,
+                 EncryptedFileInstallationStore, FileNonceStore, FileAuditRecorder
+web/             reusable n2n ControllerAdapters (Resource/Schema/Health/Admin)
+```
+
+The domain and application layers never import n2n or the transport; the single
+seam that touches the n2n `EntityManager` is `infrastructure/orm/N2nOrmSession`.
 
 ## Install
 
 ```bash
-composer require tropikal-ai/connect-n2n:^0.1
+composer require tropikal-ai/connect-n2n
 ```
 
-For local path development:
+For local path development, add a `path` repository pointing at this package and
+`composer require tropikal-ai/connect-n2n:@dev`.
 
-```json
-{
-  "repositories": [
-    {
-      "type": "path",
-      "url": "../connect-n2n"
+## Wire it into an n2n app
+
+Subclass the four controllers once and implement `composition()` — your
+composition root — declaring the resources you expose, their ORM bindings, and
+where TROPIKAL lives:
+
+```php
+class ResourceController extends \tropikal\connect\n2n\web\ResourceController {
+    protected function composition(EntityManager $em): ConnectComposition {
+        $catalog = new StaticResourceCatalog(
+            new ResourceSpec('article', 'Articles', [
+                new FieldSpec('title', 'string', writable: true, required: true),
+                new FieldSpec('categoryId', 'integer', writable: true),
+            ]),
+            /* ...category... */
+        );
+        $store = new EncryptedFileInstallationStore($statePath, $encryptionKey);
+        // build ResourceApi, SignedRequestGuard, ConnectFlow → ConnectComposition
     }
-  ]
 }
 ```
 
-Then:
+Register the routes in `var/etc/<module>/app.ini`:
 
-```bash
-composer require tropikal-ai/connect-n2n:@dev
+```ini
+[routing]
+controllers[/connect/admin]     = "app\connect\controller\AdminController"
+controllers[/connect/resources] = "app\connect\controller\ResourceController"
+controllers[/connect/schema]    = "app\connect\controller\SchemaController"
+controllers[/connect/health]    = "app\connect\controller\HealthController"
 ```
 
-## Setup
+Then open `/connect/admin`, click **Connect**, and approve. See the
+[canary app](../canary/app/connect) for a complete, runnable example including a
+signed-job end-to-end script (`bin/connect-e2e.php`).
 
-Enable the module in the n2n application the same way as other Composer `n2n-module` packages. Open the Rocket admin route for TROPIKAL Connect, connect the site, then grant entity access.
-
-The admin UI should show connected Rocket entities with separate controls:
-
-- Read: list/search/get records.
-- Write: create/update records.
-- Delete: delete records.
-
-Default access is none. Empty grants expose nothing.
-
-## Rocket Entity Discovery
-
-Discovery uses `rocket\core\model\Rocket::getSpec()` and maps Rocket EiTypes, EiMasks, EiProps, and command metadata into a safe manifest. Auth, admin, session, security, and secret-shaped fields are excluded by default.
-
-## Security Model
-
-- No hand-entered token setup.
-- No copied secret setup.
-- No browser-visible secrets.
-- Setup requires Rocket admin or superadmin access.
-- Bridge calls are signed with `tropikal-ai/connect`.
-- Nonces are atomically claimed to prevent replay.
-- Local signing secrets are encrypted at rest.
-- Reads project declared fields only.
-- Writes accept declared writable fields only.
-- Delete requires an explicit Delete grant.
-- Mutations are audit logged with redacted payloads.
-
-## Bridge Operations
-
-The signed bridge supports normalized operations when granted and supported by Rocket:
-
-- `rocket.entity.list`
-- `rocket.entity.get`
-- `rocket.entity.create`
-- `rocket.entity.update`
-- `rocket.entity.delete`
-
-Publishing is intentionally not enabled until a Rocket draft/publish flow is proven and approval metadata is enforced.
-
-## Local Development
+## Development
 
 ```bash
-composer validate --strict
-composer install --no-interaction
-vendor/bin/pint --test
-vendor/bin/phpstan analyse
-vendor/bin/phpunit --colors=never
+composer install
+vendor/bin/pint --test      # style
+vendor/bin/phpstan analyse  # static analysis
+vendor/bin/phpunit          # tests (incl. the cross-language signing vector)
 ```
 
-Use `https://example.com` style placeholder URLs in tests and docs.
+## License
 
-See `docs/implementation-notes.md` for the current Rocket adapter status.
+MIT.

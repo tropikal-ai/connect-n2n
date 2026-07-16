@@ -5,3 +5,9 @@ parameters:
     tmpDir: build/phpstan
     parallel:
         maximumNumberOfProcesses: 1
+    ignoreErrors:
+        # n2n invokes the private magic _init() by reflection; PHPStan can't see the call.
+        -
+            identifier: method.unused
+            message: '#Method .*ConnectControllerBase::_init\(\) is unused#'
+            path: src/app/tropikal/connect/n2n/web/ConnectControllerBase.php

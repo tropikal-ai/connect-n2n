@@ -1,14 +1,14 @@
 {
     "name": "tropikal-ai/connect-n2n",
-    "description": "TROPIKAL Connect integration for n2n Rocket CMF.",
+    "description": "TROPIKAL Connect integration for n2n. Plain-ORM by default; optional Rocket CMF discovery.",
     "keywords": [
         "tropikal",
         "connect",
         "n2n",
-        "rocket",
-        "cmf"
+        "orm",
+        "rocket"
     ],
-    "type": "n2n-module",
+    "type": "library",
     "license": "MIT",
     "authors": [
         {
@@ -16,12 +16,14 @@
         }
     ],
     "require": {
-        "php": "^8.2",
+        "php": ">=8.4",
         "ext-json": "*",
         "ext-mbstring": "*",
         "ext-openssl": "*",
-        "n2n/rocket": "^4.0@dev",
-        "tropikal-ai/connect": "^0.1"
+        "tropikal-ai/connect": "^0.1",
+        "n2n/n2n-persistence": "~7.5.0@dev",
+        "n2n/n2n-web": "~7.5.0@dev",
+        "ext-curl": "*"
     },
     "require-dev": {
         "laravel/pint": "^1.24",

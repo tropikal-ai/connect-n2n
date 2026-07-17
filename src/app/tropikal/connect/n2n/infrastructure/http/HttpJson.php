@@ -36,6 +36,8 @@ final readonly class HttpJson
      */
     private function post(string $url, string $body, array $headers): array
     {
+        $this->assertSecureEndpoint($url);
+
         $ch = curl_init($url);
         if ($ch === false) {
             throw new OAuthException('Unable to initialise the HTTP client.');
@@ -68,5 +70,21 @@ final readonly class HttpJson
         }
 
         return $decoded;
+    }
+
+    /**
+     * Refuse to send the authorization code, bearer token, or refresh token over
+     * cleartext. https is required; http is tolerated only for loopback hosts so
+     * local development against a mock server still works.
+     */
+    private function assertSecureEndpoint(string $url): void
+    {
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $isLocal = in_array($host, ['localhost', '127.0.0.1', '::1'], true) || str_ends_with($host, '.localhost');
+
+        if ($scheme !== 'https' && ! ($scheme === 'http' && $isLocal)) {
+            throw new OAuthException('TROPIKAL endpoints must use https (http is allowed only for localhost).');
+        }
     }
 }
